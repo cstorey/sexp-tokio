@@ -7,6 +7,7 @@ use futures::task::Unpark;
 use futures::stream::{self, Stream, Sender, Receiver};
 
 use std::sync::Arc;
+use std::collections::VecDeque;
 
 #[derive(Debug)]
 struct Unparker;
@@ -25,24 +26,34 @@ fn main() {
     let unparker = Arc::new(Unparker);
 
 
-    let sfut = futures::finished(s)
-                    .and_then(|s| { println!("Send: {:?}", 1); s.send(Ok(1)) })
-                    .and_then(|s| { println!("Send: {:?}", 2); s.send(Ok(2)) })
-                    .and_then(|s| { println!("Send: {:?}", 3); s.send(Ok(3)) })
-                    .map(|_| ())
-                    .map_err(|_e| println!("Sender error!"));
-    let mut t = task::spawn(sfut.join(serv));
+    let input = (0..10).map(Ok).collect::<Vec<Result<usize, ()>>>();
+    let inp = stream::iter(input.into_iter());
+    let sfut = inp.fold(s, |s, n| {
+                      println!("Send: {:?}", n);
+                      s.send(Ok(n)).map_err(|_e| println!("Sender error!"))
+                  })
+                  .and_then(|_| Ok(()));
     println!("Setup done!");
 
-    loop {
+    let mut tasks = VecDeque::new();
+
+    tasks.push_back(task::spawn(sfut.boxed()));
+    tasks.push_back(task::spawn(serv.boxed()));
+
+    let unparker = Arc::new(Unparker);
+    while let Some(mut t) = tasks.pop_front() {
         println!("Pre poll");
         match t.poll_future(unparker.clone()) {
             Ok(Async::Ready(v)) => {
                 println!("done: {:?}", v);
                 break;
             }
-            Ok(Async::NotReady) => println!("pending:"),
+            Ok(Async::NotReady) => {
+                println!("pending:");
+                tasks.push_back(t);
+            }
             Err(e) => println!("Error: {:?}", e),
         }
     }
+
 }
