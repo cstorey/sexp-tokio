@@ -1,27 +1,18 @@
 extern crate log;
 extern crate env_logger;
+extern crate backtrace;
 #[macro_use]
 extern crate futures;
 use futures::{Future, Async, Poll};
 use futures::task;
 use futures::task::Unpark;
 use futures::stream::{self, Stream, Sender, FutureSender, Receiver};
+use backtrace::Backtrace;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::fmt;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::mem;
-
-#[derive(Debug)]
-struct Unparker;
-
-impl Unpark for Unparker {
-    fn unpark(&self) {
-        println!("Unpark! {:?}", self);
-
-    }
-}
-
 
 // To simulate a network using the channels here, it's probably best to use
 // a hub and spoke architecture (ie: have a switch in the middle that can be
@@ -109,14 +100,6 @@ impl Future for Switch {
                             }
                         }
                     }
-
-                    // match rx.poll() {
-                    // Ok(Async::Ready(Some(val))) => {
-                    // println!("Got val: {:?} for {:?}", val, dest);
-                    // Member::Blocked(tx.send(Ok((dest, val))), rx, dest)
-                    // }
-                    // }
-                    //
                 };
 
                 if let SwitchPort::Blocked(mut txfut, rx) = newport {
@@ -223,35 +206,62 @@ impl Future for Member {
     }
 }
 
+#[derive(Debug)]
+struct Unparker(String, Arc<Mutex<VecDeque<String>>>);
+
+impl Unpark for Unparker {
+    fn unpark(&self) {
+        println!("Unpark! {:?}: {:?}", self, Backtrace::new() );
+        self.1.lock().expect("lock").push_back(self.0.clone());
+    }
+}
+
+
+
 fn main() {
 
     let mut switch = Switch::new();
-    let mut tasks = VecDeque::new();
+    let mut tasks: BTreeMap<String, _> = BTreeMap::new();
+    let mut scheduled = Arc::new(Mutex::new(VecDeque::<String>::new()));
 
     for n in 0..4 {
         let conn = switch.connect(n);
 
         let member = Member::new(conn, (n + 1) % 4);
 
-        tasks.push_back(task::spawn(member.boxed()));
+        let id = format!("Task: {:?}", n);
+        let unparker = Arc::new(Unparker(id.clone(), scheduled.clone()));
+        tasks.insert(id.clone(), (unparker, task::spawn(member.boxed())));
+        scheduled.lock().expect("lock").push_back(id);
     }
 
     switch.post_delivery(0, 0);
 
-    tasks.push_back(task::spawn(switch.boxed()));
+    let swid = format!("Switch");
+    let switch_unpark = Arc::new(Unparker(swid.clone(), scheduled.clone()));
+    tasks.insert(swid.clone(), (switch_unpark, task::spawn(switch.boxed())));
 
-    let unparker = Arc::new(Unparker);
-    while let Some(mut t) = tasks.pop_front() {
-        println!("Pre poll; {:?} after this", tasks.len());
-        match t.poll_future(unparker.clone()) {
-            Ok(Async::Ready(v)) => {
-                println!("done: {:?}", v);
+    scheduled.lock().expect("lock").push_back(swid);
+    loop {
+        let mut pending = mem::replace(&mut *scheduled.lock().expect("lock"), VecDeque::new());
+        println!("Pre poll; {:?} after this", pending);
+        if pending.is_empty() {
+            println!("Nothing scheduled? Try brute force!");
+            pending.extend(tasks.keys().cloned());
+        }
+        for id in pending {
+            println!("Poke task: {:?}", id);
+            let &mut (ref mut unparker, ref mut t) = tasks.get_mut(&id).expect("task");
+            match t.poll_future(unparker.clone()) {
+                Ok(Async::Ready(v)) => {
+                    println!("done: {:?}", v);
+                }
+                Ok(Async::NotReady) => {
+                    println!("pending:");
+                    // scheduled.lock().expect("lock").push_back(id);
+                }
+                Err(e) => println!("Error: {:?}", e),
             }
-            Ok(Async::NotReady) => {
-                println!("pending:");
-                tasks.push_back(t);
-            }
-            Err(e) => println!("Error: {:?}", e),
         }
     }
 }
