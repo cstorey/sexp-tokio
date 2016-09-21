@@ -1,6 +1,7 @@
 extern crate log;
 extern crate env_logger;
 extern crate tokio_service;
+#[macro_use]
 extern crate futures;
 use futures::{Future, IntoFuture, Async};
 use futures::task;
@@ -25,14 +26,14 @@ impl Unpark for Unparker {
 }
 
 #[derive(Debug)]
-enum Error {}
+enum Empty {}
 struct MyService;
 unsafe impl Send for MyService {}
 
 impl Service for MyService {
     type Request = u64;
     type Response = u64;
-    type Error = Error;
+    type Error = Empty;
     type Future = futures::Finished<Self::Response, Self::Error>;
     fn call(&self, req: u64) -> Self::Future {
         println!("MyService#call: {:?}", req);
@@ -42,6 +43,32 @@ impl Service for MyService {
         Async::Ready(())
     }
 }
+
+struct MpscReceiver<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+impl<T> MpscReceiver<T> {
+    fn pair() -> (mpsc::Sender<T>, Self) {
+        let (tx, rx) = mpsc::channel();
+        let recv = MpscReceiver { rx: rx };
+        (tx, recv)
+    }
+}
+
+impl<T> Stream for MpscReceiver<T> {
+    type Item = T;
+    type Error = Empty;
+
+    fn poll(&mut self) -> futures::Poll<Option<T>, Empty> {
+        match self.rx.try_recv() {
+            Ok(val) => Ok(Async::Ready(Some(val))),
+            Err(mpsc::TryRecvError::Empty) => return Ok(Async::NotReady),
+            Err(mpsc::TryRecvError::Disconnected) => return Ok(Async::Ready(None)),
+        }
+    }
+}
+
 
 type HostMsg<S: Service> = (S::Request, futures::Complete<Result<S::Response, S::Error>>);
 
@@ -54,23 +81,22 @@ struct Host<S: Service> {
     service: S,
     state: HostState<S>,
 
-    rx: mpsc::Receiver<HostMsg<S>>,
+    rx: MpscReceiver<HostMsg<S>>,
 }
+
+
 impl<S: Service> Future for Host<S> {
     type Item = ();
-    type Error = ();
-    fn poll(&mut self) -> futures::Poll<(), ()> {
+    type Error = Empty;
+    fn poll(&mut self) -> futures::Poll<(), Empty> {
         loop {
             if let HostState::Idle = self.state {
-                match self.rx.try_recv() {
-                    Ok((req, k)) => {
+                match try_ready!(self.rx.poll()) {
+                    Some((req, k)) => {
                         let resp = self.service.call(req);
                         self.state = HostState::Blocked(resp, k)
                     }
-                    Err(mpsc::TryRecvError::Empty) => {
-                        return Ok(Async::NotReady)
-                    },
-                    Err(mpsc::TryRecvError::Disconnected) => return Ok(Async::Ready(())),
+                    None => return Ok(Async::Ready(())),
                 }
             };
 
@@ -84,8 +110,8 @@ impl<S: Service> Future for Host<S> {
                     }
                     Ok(Async::NotReady) => {
                         self.state = HostState::Blocked(f, k);
-                        return Ok(Async::NotReady)
-                    },
+                        return Ok(Async::NotReady);
+                    }
                 }
             }
         }
@@ -98,7 +124,7 @@ struct Handle<S: Service> {
 
 impl<S: Service> Host<S> {
     fn build(s: S) -> (Handle<S>, Host<S>) {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = MpscReceiver::pair();
         let handle = Handle { tx: tx.clone() };
         let host = Host {
             service: s,
@@ -129,7 +155,7 @@ impl<S: Service> Service for Handle<S>
 }
 
 fn main() {
-    type Resp = Result<u64, Error>;
+    type Resp = Result<u64, Empty>;
     type Reqs = (u64, futures::Complete<Resp>);
 
     let (client, srv) = Host::build(MyService);
@@ -137,7 +163,7 @@ fn main() {
     let unparker = Arc::new(Unparker);
 
     println!("Setup done!");
-    let mut tasks: VecDeque<Spawn<Box<Future<Item = (), Error = ()>>>> = VecDeque::new();
+    let mut tasks: VecDeque<Spawn<Box<Future<Item = (), Error = Empty>>>> = VecDeque::new();
 
     let f = futures::lazy(move || {
         (client.call(32), client.call(42), client.call(89))
