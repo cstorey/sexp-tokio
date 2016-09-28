@@ -1,6 +1,30 @@
 [package]
+authors = ["Ceri Storey <ceri@lshift.net>"]
 name = "miniature-goggles"
 version = "0.1.0"
-authors = ["Ceri Storey <ceri@lshift.net>"]
 
 [dependencies]
+env_logger = "0.3.0"
+futures = "0.1"
+log = "0.3.6"
+rand = "0.3.14"
+time = "0.1.35"
+tokio-core = "0.1"
+
+[dependencies.bytes]
+git = "https://github.com/carllerche/bytes"
+
+[dependencies.tokio-line]
+git = "https://github.com/tokio-rs/tokio-line"
+
+[dependencies.tokio-middleware]
+git = "https://github.com/tokio-rs/tokio-middleware"
+
+[dependencies.tokio-proto]
+git = "https://github.com/tokio-rs/tokio-proto"
+
+[dependencies.tokio-service]
+git = "https://github.com/tokio-rs/tokio-service"
+
+[dependencies.tokio-timer]
+git = "https://github.com/tokio-rs/tokio-timer"
