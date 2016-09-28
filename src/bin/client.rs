@@ -16,53 +16,16 @@ use futures::stream;
 
 enum Empty {}
 
-struct MyClient {
-    handle: Handle,
-    client: proto::Client<String, String, stream::Empty<Empty, io::Error>, io::Error>,
-}
-
-struct MyTransport;
-
-impl tokio::io::FramedIo for MyTransport {
-    type In = Frame<String, Empty, io::Error>;
-    type Out = Frame<String, Empty, io::Error>;
-    fn poll_read(&mut self) -> Async<()> {
-        unimplemented!()
-    }
-    fn read(&mut self) -> Poll<Self::Out, io::Error> {
-        unimplemented!()
-    }
-    fn poll_write(&mut self) -> Async<()> {
-        unimplemented!()
-    }
-    fn write(&mut self, msg: Self::In) -> Poll<(), io::Error> {
-        unimplemented!()
-    }
-    fn flush(&mut self) -> Poll<(), io::Error> {
-        unimplemented!()
-    }
-}
-
-impl MyClient {
-    fn connect(handle: Handle) -> Self {
-        let client = pipeline::connect(|| Ok(MyTransport), &handle);
-        MyClient {
-            handle: handle,
-            client: client,
-        }
-    }
-}
-
-impl Service for MyClient {}
-
 pub fn main() {
     env_logger::init().unwrap();
 
     let mut core = Core::new().unwrap();
 
+    let addr = "127.0.0.1:12345".parse().unwrap();
+
     // Now our client. We use the same reactor as for the server - usually though this would be
     // done in a separate program most likely on a separate machine.
-    let client = MyClient::connect(core.handle());
+    let client = line::client::connect(core.handle(), &addr);
 
     // The connect call returns us a ClientHandle that allows us to use the 'Service' as a function
     // - one that returns a future that we can 'await' on.
