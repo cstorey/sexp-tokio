@@ -1,18 +1,28 @@
-extern crate log;
-extern crate env_logger;
-extern crate backtrace;
 #[macro_use]
 extern crate futures;
-use futures::{Future, Async, Poll};
-use futures::task;
-use futures::task::Unpark;
-use futures::stream::{self, Stream, Sender, FutureSender, Receiver};
+extern crate backtrace;
+extern crate env_logger;
+extern crate log;
+extern crate tokio_service;
 use backtrace::Backtrace;
-
-use std::sync::{Arc, Mutex};
-use std::fmt;
+use futures::stream::{self, Stream, Sender, FutureSender, Receiver};
+use futures::task::{self, Unpark, Spawn};
+use futures::{Future, IntoFuture, Async, Poll};
+use host::Host;
+use mpsc::MpscReceiver;
+use plex::{PlexClient,PlexService};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::fmt;
 use std::mem;
+use std::sync::{Arc, Mutex};
+use tokio_service::Service;
+
+mod host;
+mod mpsc;
+mod plex;
+#[derive(Debug)]
+pub enum Empty {}
+
 
 // To simulate a network using the channels here, it's probably best to use
 // a hub and spoke architecture (ie: have a switch in the middle that can be
@@ -23,7 +33,7 @@ use std::mem;
 //
 // Hub: Uses "futures::select_all" to multiplex inputs.
 
-enum SwitchPort {
+enum SwitchPort<V> {
     Dead,
     Idle(Sender<u64, ()>, Receiver<(usize, u64), ()>),
     Blocked(FutureSender<u64, ()>, Receiver<(usize, u64), ()>),
@@ -34,8 +44,6 @@ struct Switch {
     queues: BTreeMap<usize, VecDeque<u64>>,
 }
 
-struct Connection(Sender<(usize, u64), ()>, Receiver<u64, ()>);
-
 impl Switch {
     fn new() -> Self {
         Switch {
@@ -44,7 +52,7 @@ impl Switch {
         }
     }
 
-    fn connect(&mut self, name: usize) -> Connection {
+    fn connect(&mut self, name: usize) -> (MpscSender<()>, MpscReceiver<()>) {
         // switch -> member
         let (smtx, smrx) = stream::channel();
         // member -> switch
@@ -216,29 +224,64 @@ impl Unpark for Unparker {
     }
 }
 
+struct AddOne;
+unsafe impl Send for AddOne {}
 
+impl Service for AddOne {
+    type Request = u64;
+    type Response = u64;
+    type Error = Empty;
+    type Future = futures::Finished<Self::Response, Self::Error>;
+    fn call(&self, req: u64) -> Self::Future {
+        println!("AddOne#call: {:?}", req);
+        futures::finished(req + 1)
+    }
+    fn poll_ready(&self) -> Async<()> {
+        Async::Ready(())
+    }
+}
+
+const CLIENT_ID: usize = 0;
+const PONGER_ID: usize = 1;
 
 fn main() {
+    type Resp = Result<u64, Empty>;
+    type Reqs = (u64, futures::Complete<Resp>);
 
     let mut switch = Switch::new();
     let mut tasks: BTreeMap<String, _> = BTreeMap::new();
     let mut scheduled = Arc::new(Mutex::new(VecDeque::<String>::new()));
 
-    for n in 0..4 {
-        let conn = switch.connect(n);
+    let (handle, srv) = Host::build(AddOne);
 
-        let member = Member::new(conn, (n + 1) % 4);
+    let client = PlexClient::<u64, u64, Empty>::new(PONGER_ID, switch.connect(CLIENT_ID));
 
-        let id = format!("Task: {:?}", n);
+
+
+    let ponger = PlexService::service(AddOne, switch.connect(PONGER_ID));
+
+
+    let client_f = futures::lazy(move || {
+        (client.call(32), client.call(42), client.call(89))
+            .into_future()
+            .map_err(|e| panic!("{:?}", e))
+            .map(|r| println!("Result: {:?}", r))
+    });
+
+    for (id, fut) in vec![(format!("Client"), client_f), (format!("Ponger"), ponger)] {
+        // Scheduler::add(&mut self, "Client", cient_f);
         let unparker = Arc::new(Unparker(id.clone(), scheduled.clone()));
-        tasks.insert(id.clone(), (unparker, task::spawn(member.boxed())));
+        tasks.insert(id.clone(), (unparker, task::spawn(client_f.boxed())));
         scheduled.lock().expect("lock").push_back(id);
     }
 
-    switch.post_delivery(0, 0);
+
+    // switch.post_delivery(0, 0);
 
     let swid = format!("Switch");
     let switch_unpark = Arc::new(Unparker(swid.clone(), scheduled.clone()));
+
+    // All of this stuff should be in it's own type, at least.
     tasks.insert(swid.clone(), (switch_unpark, task::spawn(switch.boxed())));
 
     scheduled.lock().expect("lock").push_back(swid);
