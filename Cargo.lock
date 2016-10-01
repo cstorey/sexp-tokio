@@ -1,5 +1,5 @@
 [root]
-name = "miniature-goggles"
+name = "sexp-proto-tokio"
 version = "0.1.0"
 dependencies = [
  "bytes 0.4.0-dev (git+https://github.com/carllerche/bytes)",

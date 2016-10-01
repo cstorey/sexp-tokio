@@ -2,7 +2,7 @@ extern crate futures;
 extern crate tokio_core as tokio;
 extern crate tokio_service as service;
 extern crate tokio_proto as proto;
-extern crate miniature_goggles as goggles;
+extern crate sexp_proto_tokio as spki_proto;
 extern crate env_logger;
 use std::env::args;
 use std::io;
@@ -22,10 +22,10 @@ pub fn main() {
 
     let addr = "127.0.0.1:12345".parse().unwrap();
 
-    let client = goggles::client::connect(core.handle(), &addr);
+    let client = spki_proto::client::connect(core.handle(), &addr);
 
     // - one that returns a future that we can 'await' on.
     let resp = client.call("Hello".to_string());
-    let res: Result<String, goggles::Error> = core.run(resp);
+    let res: Result<String, spki_proto::Error> = core.run(resp);
     println!("RESPONSE: {:?}", res);
 }

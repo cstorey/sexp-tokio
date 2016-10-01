@@ -1,6 +1,6 @@
 [package]
 authors = ["Ceri Storey <ceri@lshift.net>"]
-name = "miniature-goggles"
+name = "sexp-proto-tokio"
 version = "0.1.0"
 
 [dependencies]
