@@ -7,7 +7,13 @@ extern crate spki_sexp;
 #[macro_use]
 extern crate log;
 extern crate bytes;
+#[macro_use]
+extern crate error_chain;
 
 mod sexp_proto;
+mod errors;
 pub mod server;
 pub mod client;
+pub use errors::Error;
+
+pub enum Empty {}

@@ -22,21 +22,10 @@ pub fn main() {
 
     let addr = "127.0.0.1:12345".parse().unwrap();
 
-    let service = goggles::server::serve(&core.handle(),
-                                         addr,
-                                         service::simple_service(|msg| {
-                                             println!("GOT: {:?}", msg);
-                                             Ok(msg)
-                                         }));
-
-
-    // Now our client. We use the same reactor as for the server - usually though this would be
-    // done in a separate program most likely on a separate machine.
     let client = goggles::client::connect(core.handle(), &addr);
 
-    // The connect call returns us a ClientHandle that allows us to use the 'Service' as a function
     // - one that returns a future that we can 'await' on.
     let resp = client.call("Hello".to_string());
-    let res: Result<String, io::Error> = core.run(resp);
+    let res: Result<String, goggles::Error> = core.run(resp);
     println!("RESPONSE: {:?}", res);
 }

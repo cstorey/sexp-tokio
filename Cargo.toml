@@ -4,14 +4,17 @@ name = "miniature-goggles"
 version = "0.1.0"
 
 [dependencies]
-bytes = "0.3.0"
 env_logger = "0.3.0"
+error-chain = "0.5.0"
 futures = "0.1"
 log = "0.3.6"
 rand = "0.3.14"
 serde = "0.7.0"
 time = "0.1.35"
 tokio-core = "0.1"
+
+[dependencies.bytes]
+git = "https://github.com/carllerche/bytes.git"
 
 [dependencies.spki-sexp]
 git = "https://github.com/cstorey/spki-sexp.rs.git"
