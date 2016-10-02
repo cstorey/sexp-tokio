@@ -13,7 +13,7 @@ dependencies = [
  "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-middleware 0.1.0 (git+https://github.com/tokio-rs/tokio-middleware)",
- "tokio-proto 0.1.0 (git+https://github.com/tokio-rs/tokio-proto)",
+ "tokio-proto 0.1.0 (git+https://github.com/cstorey/tokio-proto)",
  "tokio-service 0.1.0 (git+https://github.com/tokio-rs/tokio-service)",
  "tokio-timer 0.1.0 (git+https://github.com/tokio-rs/tokio-timer)",
 ]
@@ -332,7 +332,7 @@ dependencies = [
 [[package]]
 name = "tokio-proto"
 version = "0.1.0"
-source = "git+https://github.com/tokio-rs/tokio-proto#0bfe489f2bd97307024df8f0c7a7ed112f8253e5"
+source = "git+https://github.com/cstorey/tokio-proto#f4c434e3baf981e0ad5ec7cc5bff455a6d255dbc"
 dependencies = [
  "bytes 0.4.0-dev (git+https://github.com/carllerche/bytes)",
  "futures 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -432,7 +432,7 @@ dependencies = [
 "checksum time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)" = "3c7ec6d62a20df54e07ab3b78b9a3932972f4b7981de295563686849eb3989af"
 "checksum tokio-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "659cbae6c954dee37352853816c6a52180e47feb70be73bbfeec6d58c4da4a71"
 "checksum tokio-middleware 0.1.0 (git+https://github.com/tokio-rs/tokio-middleware)" = "<none>"
-"checksum tokio-proto 0.1.0 (git+https://github.com/tokio-rs/tokio-proto)" = "<none>"
+"checksum tokio-proto 0.1.0 (git+https://github.com/cstorey/tokio-proto)" = "<none>"
 "checksum tokio-service 0.1.0 (git+https://github.com/tokio-rs/tokio-service)" = "<none>"
 "checksum tokio-timer 0.1.0 (git+https://github.com/tokio-rs/tokio-timer)" = "<none>"
 "checksum utf8-ranges 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a1ca13c08c41c9c3e04224ed9ff80461d97e121589ff27c753a16cb10830ae0f"
