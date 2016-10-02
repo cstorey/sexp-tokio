@@ -11,7 +11,7 @@ use proto::pipeline::{self, Frame};
 use tokio::reactor::{Core, Handle};
 use service::Service;
 use futures::{Poll, Async};
-use futures::stream;
+use futures::stream::{self, Stream};
 
 enum Empty {}
 
@@ -22,10 +22,13 @@ pub fn main() {
 
     let addr = "127.0.0.1:12345".parse().unwrap();
 
-    let client = spki_proto::client::connect(core.handle(), &addr);
-
+    let client: spki_proto::client::Client<String, String> =
+        spki_proto::client::connect(core.handle(), &addr);
     // - one that returns a future that we can 'await' on.
-    let resp = client.call("Hello".to_string());
-    let res: Result<String, spki_proto::Error> = core.run(resp);
-    println!("RESPONSE: {:?}", res);
+    let task = stream::iter(args().map(Ok).skip(1))
+                   .and_then(|s| client.call(s.to_string()))
+                   .for_each(|r| Ok(println!("RESPONSE: {:?}", r)));
+
+    let res = core.run(task);
+    println!("Done:{:?}", res);
 }
