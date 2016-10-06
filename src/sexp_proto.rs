@@ -18,7 +18,7 @@ pub struct SexpParser<T> {
     packets: sexp::Packetiser,
 }
 
-type Frame<T> = pipeline::Frame<T, Empty, Error>;
+pub type Frame<T> = pipeline::Frame<T, Empty, Error>;
 
 impl<T> SexpParser<T> {
     pub fn new() -> Self {
@@ -28,8 +28,6 @@ impl<T> SexpParser<T> {
         }
     }
 }
-
-pub type F<T> = pipeline::Frame<T, Empty, io::Error>;
 
 impl<T: de::Deserialize> Parse for SexpParser<T> {
     type Out = Frame<T>;
